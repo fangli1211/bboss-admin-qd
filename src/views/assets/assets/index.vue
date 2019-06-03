@@ -1,23 +1,36 @@
 <template>
   <div class="app-container">
-    <eHeader :query="query"/>
+    <eHeader :query="query" :dicts="dicts"/>
     <!--表格渲染-->
     <el-table v-loading="loading" :data="data" size="small" style="width: 100%;">
-      <el-table-column prop="username" label="用户名"/>
-      <el-table-column prop="requestIp" label="IP"/>
-      <el-table-column prop="description" label="描述"/>
-      <el-table-column :show-overflow-tooltip="true" prop="method" label="方法名称"/>
-      <el-table-column :show-overflow-tooltip="true" prop="params" label="参数"/>
-      <el-table-column prop="time" label="请求耗时" align="center">
+      <el-table-column label="序号" type="index" width="50" align="center">
         <template slot-scope="scope">
-          <el-tag v-if="scope.row.time <= 300">{{ scope.row.time }}ms</el-tag>
-          <el-tag v-else-if="scope.row.time <= 1000" type="warning">{{ scope.row.time }}ms</el-tag>
-          <el-tag v-else type="danger">{{ scope.row.time }}ms</el-tag>
+          <span>{{ page * size + scope.$index + 1 }}</span>
         </template>
       </el-table-column>
-      <el-table-column prop="createTime" label="创建日期" width="180px">
+      <el-table-column prop="id" label="资产ID"/>
+      <el-table-column prop="name" label="资产名称"/>
+      <el-table-column prop="ip" label="设备类型"/>
+      <el-table-column prop="ip" label="IP"/>
+      <el-table-column prop="ip" label="厂商"/>
+      <el-table-column prop="ip" label="位置"/>
+      <el-table-column prop="ip" label="操作系统"/>
+      <el-table-column prop="ip" label="所属项目"/>
+      <el-table-column v-if="checkPermission(['ADMIN','USERJOB_ALL','USERJOB_EDIT','USERJOB_DELETE'])" label="操作" width="130px" align="center">
         <template slot-scope="scope">
-          <span>{{ parseTime(scope.row.createTime) }}</span>
+          <edit v-permission="['ADMIN','USERJOB_ALL','USERJOB_EDIT']" :dicts="dicts" :data="scope.row" :sup_this="sup_this"/>
+          <el-popover
+            v-permission="['ADMIN','USERJOB_ALL','USERJOB_DELETE']"
+            :ref="scope.row.id"
+            placement="top"
+            width="180">
+            <p>确定删除本条数据吗？</p>
+            <div style="text-align: right; margin: 0">
+              <el-button size="mini" type="text" @click="$refs[scope.row.id].doClose()">取消</el-button>
+              <el-button :loading="delLoading" type="primary" size="mini" @click="subDelete(scope.row.id)">确定</el-button>
+            </div>
+            <el-button slot="reference" type="danger" icon="el-icon-delete" size="mini"/>
+          </el-popover>
         </template>
       </el-table-column>
     </el-table>
@@ -32,27 +45,58 @@
 </template>
 
 <script>
+import checkPermission from '@/utils/permission'
 import initData from '@/mixins/initData'
+import initDict from '@/mixins/initDict'
+import { del } from '@/api/job'
 import { parseTime } from '@/utils/index'
 import eHeader from './module/header'
+import edit from './module/edit'
 export default {
-  components: { eHeader },
-  mixins: [initData],
+  components: { eHeader, edit },
+  mixins: [initData, initDict],
+  data() {
+    return {
+      delLoading: false, sup_this: this
+    }
+  },
   created() {
     this.$nextTick(() => {
       this.init()
+      // 加载数据字典
+      this.getDict('job_status')
     })
   },
   methods: {
     parseTime,
+    checkPermission,
     beforeInit() {
-      this.url = 'api/logs'
-      const sort = 'id,desc'
-      const query = this.query
-      const username = query.username
+      this.url = 'api/job'
+      const sort = 'sort,asc'
       this.params = { page: this.page, size: this.size, sort: sort }
-      if (username && username) { this.params['username'] = username }
+      const query = this.query
+      const value = query.value
+      const enabled = query.enabled
+      if (value) { this.params['name'] = value }
+      if (enabled !== '' && enabled !== null) { this.params['enabled'] = enabled }
       return true
+    },
+    subDelete(id) {
+      this.delLoading = true
+      del(id).then(res => {
+        this.delLoading = false
+        this.$refs[id].doClose()
+        this.init()
+        this.$notify({
+          title: '删除成功',
+          type: 'success',
+          duration: 2500
+        })
+      }).catch(err => {
+        this.delLoading = false
+        this.$refs[id].doClose()
+        console.log(err.response.data.message)
+      })
     }
   }
 }
